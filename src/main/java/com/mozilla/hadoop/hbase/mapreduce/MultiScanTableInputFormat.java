@@ -117,7 +117,7 @@ public class MultiScanTableInputFormat extends org.apache.hadoop.mapreduce.Input
 
 		Set<InputSplit> splits = new HashSet<InputSplit>();
 		for (int i = 0; i < keys.getFirst().length; i++) {
-			String regionLocation = table.getRegionLocation(keys.getFirst()[i]).getServerAddress().getHostname();
+			String regionLocation = table.getRegionLocation(keys.getFirst()[i]).getHostname();
 			
 			for (Scan s : scans) {
 				byte[] startRow = s.getStartRow();
