@@ -36,9 +36,13 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.mapreduce.TableMapper;
 import org.apache.hadoop.hbase.util.Base64;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.*;
+
+import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
+import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
+import com.google.protobuf.InvalidProtocolBufferException;
+
+
 import org.apache.hadoop.mapreduce.Job;
 
 import com.mozilla.util.DateUtil;
@@ -95,13 +99,20 @@ public class MultiScanTableMapReduceUtil {
 	public static Scan[] convertStringToScanArray(final String base64) throws IOException {
 		final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(Base64.decode(base64)));
 
-		ArrayWritable aw = new ArrayWritable(Scan.class);
+		ArrayWritable aw = new ArrayWritable(BytesWritable.class);
 		aw.readFields(dis);
 		
 		Writable[] writables = aw.get();
 		Scan[] scans = new Scan[writables.length];
 		for (int i=0; i < writables.length; i++) {
-			scans[i] = (Scan)writables[i];
+      ClientProtos.Scan serializedScan;
+      try {
+        serializedScan = ClientProtos.Scan.parseFrom(((BytesWritable) writables[i]).copyBytes());
+      } catch (InvalidProtocolBufferException ipbe) {
+        throw new IOException(ipbe);
+      }
+
+      scans[i] = ProtobufUtil.toScan(serializedScan);
 		}
 
 		return scans;
@@ -117,7 +128,15 @@ public class MultiScanTableMapReduceUtil {
 		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		final DataOutputStream dos = new DataOutputStream(baos);
 
-		ArrayWritable aw = new ArrayWritable(Scan.class, scans);
+    BytesWritable[] serializedScans = new BytesWritable[scans.length];
+    for (int i = 0; i < serializedScans.length; i++) {
+      ClientProtos.Scan proto = ProtobufUtil.toScan(scans[i]);
+      serializedScans[i] = new BytesWritable(proto.toByteArray());
+
+      System.err.println("reverse " + ClientProtos.Scan.parseFrom(serializedScans[i].copyBytes()).getStartRow());
+    }
+      
+		ArrayWritable aw = new ArrayWritable(BytesWritable.class, serializedScans);
 		aw.write(dos);
 
 		return Base64.encodeBytes(baos.toByteArray());
